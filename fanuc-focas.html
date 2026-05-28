@@ -1,0 +1,211 @@
+<!-- ── FANUC Config Node ─────────────────────────────────────────────────── -->
+<script type="text/javascript">
+    RED.nodes.registerType('fanuc-config', {
+        category: 'config',
+        defaults: {
+            name:       { value: '' },
+            host:       { value: '192.168.0.100', required: true },
+            port:       { value: '8193',          required: true },
+            cnc_series: { value: '16',            required: true },
+        },
+        label: function() {
+            return this.name || `${this.host}:${this.port}`;
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="fanuc-config">
+    <div class="form-row">
+        <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-config-input-name" placeholder="e.g. Lathe 1">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-host"><i class="fa fa-globe"></i> IP Address</label>
+        <input type="text" id="node-config-input-host" placeholder="192.168.0.100">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-port"><i class="fa fa-plug"></i> FOCAS Port</label>
+        <input type="text" id="node-config-input-port" placeholder="8193">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-cnc_series"><i class="fa fa-microchip"></i> CNC Series</label>
+        <select id="node-config-input-cnc_series">
+            <option value="16">Series 16 / 18 / 21 / 0i / 30i  (most machines)</option>
+            <option value="15">Series 15 / 15i</option>
+        </select>
+    </div>
+</script>
+
+
+<!-- ── FANUC Poll Node ───────────────────────────────────────────────────── -->
+<script type="text/javascript">
+
+    // Axes Data sub-types (mirrors the screenshot)
+    const FANUC_AXIS_TYPES = [
+        { group: 'Position', options: [
+            { v: 'abs_pos',    l: 'Absolute position' },
+            { v: 'machine_pos',l: 'Machine position' },
+            { v: 'rel_pos',    l: 'Relative position' },
+            { v: 'dist_to_go', l: 'Distance to go' },
+        ]},
+        { group: 'Servo', options: [
+            { v: 'servo_load', l: 'Servo load meter (percentage)' },
+        ]},
+        { group: 'Spindle', options: [
+            { v: 'spindle_load',  l: 'Spindle load meter (percentage)' },
+            { v: 'spindle_speed', l: 'Spindle motor speed (rpm)' },
+        ]},
+        { group: 'Feed', options: [
+            { v: 'feedrate', l: 'Actual feedrate (mm/min)' },
+        ]},
+    ];
+
+    // Functions that need no extra config
+    const FANUC_SIMPLE_FNS = new Set([
+        'status_info','system_info','timers','program_number',
+        'part_count','alarm_messages','all'
+    ]);
+
+    RED.nodes.registerType('fanuc-focas', {
+        category:    'input',
+        color:       '#f5d128',
+        defaults: {
+            name:    { value: '' },
+            server:  { value: '', type: 'fanuc-config', required: true },
+            fn:      { value: 'all' },
+            subtype: { value: 'feedrate' },
+            params:  { value: '' },
+        },
+        inputs:  1,
+        outputs: 1,
+        icon:    'inject.png',
+        label: function() {
+            const cfg = RED.nodes.node(this.server);
+            const host = cfg ? cfg.label() : '';
+            const fnLabel = {
+                all:            'All Data',
+                status_info:    'Status Info',
+                system_info:    'System Info',
+                timers:         'Timers',
+                axes_data:      'Axes Data',
+                parameters:     'Parameters',
+                program_number: 'Program Number',
+                part_count:     'Part Count',
+                alarm_messages: 'Alarm Messages',
+                macro:          'Macro',
+            }[this.fn] || this.fn;
+            return this.name || (host ? `${host} · ${fnLabel}` : fnLabel);
+        },
+        paletteLabel: 'fanuc focas',
+
+        oneditprepare: function() {
+            const node = this;
+
+            // Build axes sub-type select with optgroups
+            const $axisType = $('#node-input-subtype');
+            $axisType.empty();
+            FANUC_AXIS_TYPES.forEach(group => {
+                const $g = $('<optgroup>').attr('label', group.group);
+                group.options.forEach(o => {
+                    $g.append($('<option>').val(o.v).text(o.l));
+                });
+                $axisType.append($g);
+            });
+
+            function updateVisibility() {
+                const fn = $('#node-input-fn').val();
+                $('#fanuc-row-subtype').toggle(fn === 'axes_data');
+                $('#fanuc-row-params').toggle(fn === 'parameters' || fn === 'macro');
+                // Update params label
+                if (fn === 'macro') {
+                    $('#fanuc-params-label').text('Macro variables');
+                    $('#fanuc-params-hint').text('Comma-separated macro numbers e.g. 3901,3902');
+                } else {
+                    $('#fanuc-params-label').text('Parameter numbers');
+                    $('#fanuc-params-hint').text('Comma-separated param numbers e.g. 6711,6712');
+                }
+            }
+
+            $('#node-input-fn').on('change', updateVisibility);
+
+            // Restore saved values
+            $('#node-input-fn').val(node.fn || 'all');
+            $axisType.val(node.subtype || 'feedrate');
+            $('#node-input-params').val(node.params || '');
+
+            updateVisibility();
+        },
+    });
+</script>
+
+<script type="text/html" data-template-name="fanuc-focas">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="fanuc-focas">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-server"></i> Endpoint</label>
+        <input type="text" id="node-input-server">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-fn"><i class="fa fa-cog"></i> Function</label>
+        <select id="node-input-fn" style="width:70%">
+            <option value="all">All Data (combined payload)</option>
+            <optgroup label="────────────────">
+            <option value="status_info">Status Info</option>
+            <option value="system_info">System Info</option>
+            <option value="timers">Timers</option>
+            <option value="axes_data">Axes Data</option>
+            <option value="parameters">Parameters</option>
+            <option value="program_number">Program Number</option>
+            <option value="part_count">Part Count</option>
+            <option value="alarm_messages">Alarm Messages</option>
+            <option value="macro">Macro</option>
+            </optgroup>
+        </select>
+    </div>
+
+    <!-- Axes sub-type — shown only when fn=axes_data -->
+    <div class="form-row" id="fanuc-row-subtype" style="display:none">
+        <label for="node-input-subtype"><i class="fa fa-list"></i> Type</label>
+        <select id="node-input-subtype" style="width:70%"></select>
+    </div>
+
+    <!-- Param / macro numbers — shown only when fn=parameters or fn=macro -->
+    <div class="form-row" id="fanuc-row-params" style="display:none">
+        <label for="node-input-params">
+            <i class="fa fa-hashtag"></i>
+            <span id="fanuc-params-label">Parameter numbers</span>
+        </label>
+        <input type="text" id="node-input-params" placeholder="6711,6712" style="width:70%">
+        <div class="form-tips" id="fanuc-params-hint" style="margin-top:4px">
+            Comma-separated param numbers e.g. 6711,6712
+        </div>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="fanuc-focas">
+    <p>Polls a FANUC CNC controller via FOCAS2 TCP and outputs <code>msg.payload</code>.</p>
+
+    <h3>Function</h3>
+    <dl class="message-properties">
+        <dt>All Data</dt><dd>Full combined payload (controller, state, timers, program, alarms)</dd>
+        <dt>Status Info</dt><dd>mode, run_state, motion, alarm, emergency, edit</dd>
+        <dt>System Info</dt><dd>cnc_type, mt_type, series, version, axes</dd>
+        <dt>Timers</dt><dd>power_on, auto_operation, cutting, cycle — with total_seconds and formatted</dd>
+        <dt>Axes Data</dt><dd>Position, servo/spindle load, feedrate — select sub-type</dd>
+        <dt>Parameters</dt><dd>Raw parameter values by number</dd>
+        <dt>Program Number</dt><dd>Running and main program numbers with comments</dd>
+        <dt>Part Count</dt><dd>Required and lifetime total parts</dd>
+        <dt>Alarm Messages</dt><dd>Active alarms with type, code, axis, text</dd>
+        <dt>Macro</dt><dd>Custom macro variable values by number</dd>
+    </dl>
+
+    <h3>Dynamic override</h3>
+    <p>Set <code>msg.function</code>, <code>msg.subtype</code>, or <code>msg.params</code> to override the configured values at runtime.</p>
+
+    <h3>Notes</h3>
+    <p>FOCAS is strictly sequential. Each node maintains its own TCP connection per poll cycle.</p>
+</script>
