@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-fanuc-focas",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Node-RED node for FANUC CNC data collection via FOCAS2 protocol (pure Node.js, no native libraries, adapted from pyfanuc)",
   "keywords": ["node-red", "fanuc", "focas", "cnc", "iot", "focas2"],
   "author": "zhide loh",

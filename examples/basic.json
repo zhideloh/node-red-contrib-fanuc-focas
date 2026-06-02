@@ -1,0 +1,175 @@
+[
+    {
+        "id": "1507477b8b1c3dc7",
+        "type": "fanuc-focas",
+        "z": "b3c14d7677a07862",
+        "name": "",
+        "server": "fd965852aa17a6e5",
+        "fn": "all",
+        "subtype": "dist_to_go",
+        "params": "6844",
+        "x": 590,
+        "y": 300,
+        "wires": [
+            [
+                "16d5767365f4193e"
+            ]
+        ]
+    },
+    {
+        "id": "16d5767365f4193e",
+        "type": "change",
+        "z": "b3c14d7677a07862",
+        "name": "set flow variables",
+        "rules": [
+            {
+                "t": "set",
+                "p": "run_state",
+                "pt": "flow",
+                "to": "payload.machine_state.run_state",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "main_comment",
+                "pt": "flow",
+                "to": "payload.active_program.main_comment",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "power_on_time",
+                "pt": "flow",
+                "to": "payload.timers.power_on_time.total_seconds",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "auto_operation_time",
+                "pt": "flow",
+                "to": "payload.timers.auto_operation_time.total_seconds",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "cutting_time",
+                "pt": "flow",
+                "to": "payload.timers.cutting_time.total_seconds",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "lifetime_total",
+                "pt": "flow",
+                "to": "payload.part_count.lifetime_total",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "actual_feedrate_mm_min",
+                "pt": "flow",
+                "to": "payload.feedrate_spindle.actual_feedrate_mm_min",
+                "tot": "msg"
+            },
+            {
+                "t": "set",
+                "p": "actual_spindle_rpm",
+                "pt": "flow",
+                "to": "payload.feedrate_spindle.actual_spindle_rpm",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 850,
+        "y": 300,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "737ce21a2f48b5a6",
+        "type": "opcua-compact-server",
+        "z": "b3c14d7677a07862",
+        "port": "10503",
+        "endpoint": "",
+        "productUri": "",
+        "acceptExternalCommands": true,
+        "maxAllowedSessionNumber": 10,
+        "maxConnectionsPerEndpoint": 10,
+        "maxAllowedSubscriptionNumber": 100,
+        "alternateHostname": "",
+        "name": "",
+        "showStatusActivities": false,
+        "showErrors": false,
+        "allowAnonymous": true,
+        "individualCerts": false,
+        "isAuditing": false,
+        "serverDiscovery": true,
+        "users": [],
+        "xmlsetsOPCUA": [],
+        "publicCertificateFile": "",
+        "privateCertificateFile": "",
+        "registerServerMethod": 1,
+        "discoveryServerEndpointUrl": "",
+        "capabilitiesForMDNS": "",
+        "maxNodesPerRead": 1000,
+        "maxNodesPerWrite": 1000,
+        "maxNodesPerHistoryReadData": 100,
+        "maxNodesPerBrowse": 3000,
+        "maxBrowseContinuationPoints": 10,
+        "maxHistoryContinuationPoints": 10,
+        "delayToInit": 1000,
+        "delayToClose": 200,
+        "serverShutdownTimeout": 100,
+        "addressSpaceScript": "function constructAlarmAddressSpace(server, addressSpace, eventObjects, done) {\n  const opcua = coreServer.choreCompact.opcua;\n  const rootFolder = addressSpace.findNode(\"RootFolder\");\n  const namespace = addressSpace.getOwnNamespace();\n  const Variant = opcua.Variant;\n  const DataType = opcua.DataType;\n\n  function flowVal(key, fallback) {\n    var v = sandboxFlowContext.get(key);\n    return (v === null || v === undefined) ? fallback : v;\n  }\n\n  function addStr(bname, nid, getter) {\n    namespace.addVariable({\n      organizedBy: rootFolder.objects,\n      browseName: bname,\n      nodeId: \"ns=1;s=\" + nid,\n      dataType: \"String\",\n      value: {\n        get: function() {\n          return new Variant({ dataType: DataType.String, value: String(getter() || \"\") });\n        }\n      }\n    });\n  }\n\n  function addDbl(bname, nid, getter) {\n    namespace.addVariable({\n      organizedBy: rootFolder.objects,\n      browseName: bname,\n      nodeId: \"ns=1;s=\" + nid,\n      dataType: \"Double\",\n      value: {\n        get: function() {\n          return new Variant({ dataType: DataType.Double, value: Number(getter() || 0) });\n        }\n      }\n    });\n  }\n\n  // Flat — all nodes directly under Objects, no subfolders\n  addStr(\"run_state\", \"run_state\",\n    function() { return flowVal(\"run_state\", \"\"); });\n\n  addStr(\"main_comment\", \"main_comment\",\n    function() { return flowVal(\"main_comment\", \"\"); });\n\n  addDbl(\"power_on_time\", \"power_on_time\",\n    function() {\n      return flowVal(\"power_on_time\", 0);\n      // return (v && v.display) ? v.display : \"\";\n    });\n\n  addDbl(\"auto_operation_time\", \"auto_operation_time\",\n    function() {\n      return flowVal(\"auto_operation_time\", 0);\n      // return (v && v.display) ? v.display : \"\";\n    });\n\n  addDbl(\"cutting_time\", \"cutting_time\",\n    function() {\n      return flowVal(\"cutting_time\", 0);\n      // return (v && v.display) ? v.display : \"\";\n    });\n\n  addDbl(\"lifetime_total\", \"lifetime_total\",\n    function() { return flowVal(\"lifetime_total\", 0); });\n\n  addDbl(\"actual_feedrate_mm_min\", \"actual_feedrate_mm_min\",\n    function() { return flowVal(\"actual_feedrate_mm_min\", 0); });\n\n  addDbl(\"actual_spindle_rpm\", \"actual_spindle_rpm\",\n    function() { return flowVal(\"actual_spindle_rpm\", 0); });\n\n  node.warn(\"FANUC OPC UA address space ready\");\n  done();\n}\n",
+        "x": 300,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "06ee3f2089b35eaf",
+        "type": "inject",
+        "z": "b3c14d7677a07862",
+        "name": "polling inject node",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "2",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 330,
+        "y": 300,
+        "wires": [
+            [
+                "1507477b8b1c3dc7"
+            ]
+        ]
+    },
+    {
+        "id": "013443aafab3b902",
+        "type": "comment",
+        "z": "b3c14d7677a07862",
+        "name": "",
+        "info": "This examples polls a FANUC controller and exposes the data via an OPCUA server.\n\n**Additional node red packages to be installed:**\nnode-red-contrib-opcua-server\n",
+        "x": 280,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "fd965852aa17a6e5",
+        "type": "fanuc-config",
+        "name": "",
+        "host": "192.168.100.11",
+        "port": "8193",
+        "cnc_series": "16"
+    }
+]
